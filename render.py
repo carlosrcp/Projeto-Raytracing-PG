@@ -13,9 +13,9 @@ class rayhit:
 
 # classe principal dos objetos da cena
 class scene_object:
-    def __init__(self, position = [0,0,0], radius = 1, color = (255,0,0)):
+    def __init__(self, position = [0,0,0], color = (255,0,0)):
         self.position = position
-        self.radius = radius
+        #self.radius = radius
         self.color = color
     
     # retorna a normal no ponto p
@@ -26,10 +26,24 @@ class scene_object:
     def intersection(self, origin, direction):
         return
 
+# calsse do objeto: plano
+class plane(scene_object):
+    def __init__(self, position=[0, 0, 0], normal=[0,1,0], color=(255, 0, 0)):
+        self.normal = normal
+        super().__init__(position, color)
+    
+    def normal(self, p):
+        return self.normal
+    
+    def intersection(self, origin, direction):
+        return 0
+
 # classe do objeto: esfera
 class sphere(scene_object):
+
     def __init__(self, position=[0, 0, 0], radius=1, color = (255,0,0)):
-        super().__init__(position, radius,color)
+        self.radius = radius
+        super().__init__(position, color)
     
     def normal(self, p):
         return normalized(p - self.position)
@@ -82,6 +96,7 @@ class scene_main:
         self.objs.append(sphere([0,0,0],0.6))
         self.objs.append(sphere([2,1,0.3],0.5, (0,255,0)))
         self.objs.append(sphere([2,1,7], 2, (0,0,255)))
+        self.objs.append(plane([0,0,0],[0,1,0] , color= (100,100,100)))
 
 # função principal para criar a imagem test.png com o resultado
 def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up):
@@ -146,14 +161,21 @@ res_vertical = 200 * res_factor
 size_pixel = 0.05 / res_factor
 cam_dist = 7.5
 cam_pos = numpy.array([0,0,-5])
-# se certificar de que cam_forward e cam_up estão normalizados e são ortogonais
+# se certificar de que cam_forward e cam_up não são paralelos o [0,0,0]
 cam_forward = numpy.array([0,0,1])
 cam_up = numpy.array([0,1,0])
+
+cam_forward = normalized(cam_forward)
+cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
 
 # para conferir o field of view da camera, usar valor em torno de 90 para menos distorção
 # fov = atan((0.05 * 300 * .5) / 7.5) * 57.2958 * 2
 # print(fov)
 
-render(res_horizontal, res_vertical, size_pixel,cam_dist, cam_pos, cam_forward, cam_up)
+# checa se cam_forward e cam_up são aceitos
+if (cam_forward[0] == 0 and cam_forward[1] == 0 and cam_forward[2] == 0) or (cam_up[0] == 0 and cam_up[1] == 0 and cam_up[2] == 0):
+    print('cam_forward e cam_up não podem ser [0,0,0] ou paralelas')
+else:
+    render(res_horizontal, res_vertical, size_pixel,cam_dist, cam_pos, cam_forward, cam_up)
 
 
