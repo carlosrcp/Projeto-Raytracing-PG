@@ -1,6 +1,9 @@
 from cmath import atan, sqrt
+from http.server import SimpleHTTPRequestHandler
+from sys import set_coroutine_origin_tracking_depth
 import numpy
 from PIL import Image
+from pkg_resources import split_sections
 
 # classe para passar os dados quando houver algum hit
 class rayhit:
@@ -108,18 +111,30 @@ class scene_main:
         
         # criação de objetos para popular a cena
         self.objs = []
-        self.objs.append(sphere([-4,-5,12], 5, (0,255,255)))
-        self.objs.append(sphere([0,0,0],0.6))
-        self.objs.append(sphere([2,1,0.3],0.5, (0,255,0)))
-        self.objs.append(sphere([2,1,7], 2, (0,0,255)))
-        self.objs.append(plane([0,-.25,0],[0,1,0] , color= (150,150,150)))
-        self.objs.append(plane([3.5,0,0],[-1,-1,0] , color= (150, 0,150)))
+        self.bg_color = (0,0,0)
+
+        #self.objs.append(sphere([-4,-5,12], 5, (0,255,255)))
+        #self.objs.append(sphere([0,0,0],0.6))
+        #self.objs.append(sphere([2,1,0.3],0.5, (0,255,0)))
+        #self.objs.append(sphere([2,1,7], 2, (0,0,255)))
+        #self.objs.append(plane([0,-.25,0],[0,1,0] , color= (150,150,150)))
+        #self.objs.append(plane([3.5,0,0],[-1,-1,0] , color= (150, 0,150)))
+    
+    def setBackground_Color(self, color):
+        self.bg_color = color
+    
+    def getBackground_Color(self):
+        return self.bg_color
+
+    def addSphere(self, position, radius, color):
+        self.objs.append(sphere(position, radius, color))
+    
+    def addPlane(self, position, normal, color):
+        self.objs.append(plane(position, normal, color))
+
 
 # função principal para criar a imagem test.png com o resultado
-def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up):
-    # cria a cena
-    new_scene = scene_main()
-
+def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up, scene):
     # cria um Image todo preto
     img = Image.new('RGB', (res_h,res_v), color = (0,0,0))
     
@@ -133,13 +148,13 @@ def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up):
     for x in range(res_h):
         for y in range(res_v):
             ray_dir = normalized((topleft + (cam_up * -y + cam_right * x) * pxl_size) - cam_pos)
-            img.putpixel((x,y), cast(cam_pos,ray_dir,new_scene))
+            img.putpixel((x,y), cast(cam_pos,ray_dir, scene))
      
     img.save('test.png')
     print("imagem salva")
 
 def cast(origin, direction,scene):
-    color = (0,0,0)
+    color = scene.getBackground_Color()
     hit = trace(origin,direction,scene)
     if hit:
         color = hit.color
@@ -170,6 +185,8 @@ def normalized(vec):
     else:
         return vec / n
 
+
+# valores padrão
 # para mudara  resolucao sem alterar o fov, quanto maior melhor a imagem e mais lento fica
 res_factor = 1
 
@@ -182,17 +199,162 @@ cam_pos = numpy.array([0,1,-5])
 cam_forward = numpy.array([0,0,1])
 cam_up = numpy.array([0,1,0])
 
-cam_forward = normalized(cam_forward)
-cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
-
 # para conferir o field of view da camera, usar valor em torno de 90 para menos distorção
 # fov = atan((0.05 * 300 * .5) / 7.5) * 57.2958 * 2
 # print(fov)
+
+new_scene = scene_main()
+bg_color = (0,0,0)
+
+leituraArquivo = input('Ler do arquivo "inputs"? (s para sim): ')
+
+if leituraArquivo == 's':
+    with open("input.txt") as f:
+        inputs = f.read().split()
+
+    index = 0
+
+    res_vertical = int(inputs[index])
+    index +=1
+    res_horizontal = int(inputs[index])
+    index +=1
+    size_pixel = float(inputs[index])
+    index +=1
+    cam_dist = float(inputs[index])
+    index +=1
+    cam_pos_x = float(inputs[index])
+    index +=1
+    cam_pos_y = float(inputs[index])
+    index +=1
+    cam_pos_z = float(inputs[index])
+    index +=1
+    cam_forward_x = float(inputs[index])
+    index +=1
+    cam_forward_y = float(inputs[index])
+    index +=1
+    cam_forward_z = float(inputs[index])
+    index +=1
+    cam_up_x = float(inputs[index])
+    index +=1
+    cam_up_y = float(inputs[index])
+    index +=1
+    cam_up_z = float(inputs[index])
+    index +=1
+    bg_color_r = int(inputs[index])
+    index +=1
+    bg_color_g = int(inputs[index])
+    index +=1
+    bg_color_b = int(inputs[index])
+    index +=1
+    k_obj = int(inputs[index])
+    index +=1
+
+
+    new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
+
+    cam_pos = numpy.array([cam_pos_x, cam_pos_y, cam_pos_z])
+    cam_forward = numpy.array([cam_forward_x, cam_forward_y, cam_forward_z]) - cam_pos
+    cam_up = numpy.array([cam_up_x, cam_up_y, cam_up_z])
+
+    cam_forward = normalized(cam_forward)
+    cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
+
+    for i in range(k_obj):
+        color_r = int(inputs[index])
+        index +=1
+        color_g = int(inputs[index])
+        index +=1
+        color_b = int(inputs[index])
+        index +=1
+        color = (color_r, color_g, color_b)
+
+        obj_select = inputs[index]
+        index +=1
+
+        pos_x = float(inputs[index])
+        index +=1
+        pos_y = float(inputs[index])
+        index +=1
+        pos_z = float(inputs[index])
+        index +=1
+
+        position = numpy.array([pos_x, pos_y, pos_z])
+
+        if obj_select == '*':
+            radius = float(inputs[index])
+            index +=1
+
+            new_scene.addSphere(position, radius, color)
+        else:
+            normal_x = float(inputs[index])
+            index +=1
+            normal_y = float(inputs[index])
+            index +=1
+            normal_z = float(inputs[index])
+            index +=1
+
+            normal = normalized([normal_x, normal_y, normal_z])
+
+            new_scene.addPlane(position, normal, color)
+else:
+    res_vertical = int(input("resolucao vertical"))
+    res_horizontal = int(input("resolucao horizontal"))
+    size_pixel = float(input("tamanho do pixel"))
+    cam_dist = float(input("distancia camera"))
+    cam_pos_x = float(input("camera pos x"))
+    cam_pos_y = float(input("camera pos y"))
+    cam_pos_z = float(input("camera pos z"))
+    cam_forward_x = float(input("camera mira x"))
+    cam_forward_y = float(input("camera mira y"))
+    cam_forward_z = float(input("camera mira z"))
+    cam_up_x = float(input("camera up x"))
+    cam_up_y = float(input("camera up y"))
+    cam_up_z = float(input("camera up z"))
+    bg_color_r = int(input("cor fundo r (0 a 255)"))
+    bg_color_g = int(input("cor fundo g (0 a 255)"))
+    bg_color_b = int(input("cor fundo b (0 a 255)"))
+    k_obj = int(input("quantidade de objetos"))
+
+    new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
+
+    cam_pos = numpy.array([cam_pos_x, cam_pos_y, cam_pos_z])
+    cam_forward = numpy.array([cam_forward_x, cam_forward_y, cam_forward_z]) - cam_pos
+    cam_up = numpy.array([cam_up_x, cam_up_y, cam_up_z])
+
+    cam_forward = normalized(cam_forward)
+    cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
+
+    for i in range(k_obj):
+        color_r = int(input("color r"))
+        color_g = int(input("color g"))
+        color_b = int(input("color b"))
+        color = (color_r, color_g, color_b)
+
+        obj_select = input("* para esfera / para plano")
+        
+        pos_x = float(input("pos x"))
+        pos_y = float(input("pos y"))
+        pos_z = float(input("pos z"))
+        
+        position = numpy.array([pos_x, pos_y, pos_z])
+
+        if obj_select == '*':
+            radius = float(input("radius"))
+
+            new_scene.addSphere(position, radius, color)
+        else:
+            normal_x = float(input("normal x"))
+            normal_y = float(input("normal y"))
+            normal_z = float(input("normal z"))
+
+            normal = normalized([normal_x, normal_y, normal_z])
+
+            new_scene.addPlane(position, normal, color)
+
 
 # checa se cam_forward e cam_up são aceitos
 if (cam_forward[0] == 0 and cam_forward[1] == 0 and cam_forward[2] == 0) or (cam_up[0] == 0 and cam_up[1] == 0 and cam_up[2] == 0):
     print('cam_forward e cam_up não podem ser [0,0,0] ou paralelas')
 else:
-    render(res_horizontal, res_vertical, size_pixel,cam_dist, cam_pos, cam_forward, cam_up)
-
-
+    print('gerando imagem...')
+    render(res_horizontal, res_vertical, size_pixel,cam_dist, cam_pos, cam_forward, cam_up, new_scene)
