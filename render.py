@@ -19,7 +19,7 @@ class scene_object:
         self.color = color
     
     # retorna a normal no ponto p
-    def normal(self, p):
+    def getNormal(self, p):
         return
     
     # retorna 0 se não houver hit, se houver retorna um rayhit
@@ -29,14 +29,30 @@ class scene_object:
 # calsse do objeto: plano
 class plane(scene_object):
     def __init__(self, position=[0, 0, 0], normal=[0,1,0], color=(255, 0, 0)):
-        self.normal = normal
+        self.normal = normalized(normal)
         super().__init__(position, color)
     
-    def normal(self, p):
+    def getNormal(self, p):
         return self.normal
     
     def intersection(self, origin, direction):
-        return 0
+        
+        ldotn = numpy.dot(normalized(direction),normalized(self.normal))
+        if abs(ldotn) <= 0.001:
+            return 0
+        
+        t = numpy.dot((self.position - origin), self.normal) / ldotn
+        
+        # erro quando a camera está na area do plano
+
+        if t<0:
+            return 0
+        else:
+            hitPoint = origin + direction * t
+            normal = self.getNormal(hitPoint)
+            color = self.color
+            return rayhit(self, hitPoint, normal, t, color)
+
 
 # classe do objeto: esfera
 class sphere(scene_object):
@@ -45,7 +61,7 @@ class sphere(scene_object):
         self.radius = radius
         super().__init__(position, color)
     
-    def normal(self, p):
+    def getNormal(self, p):
         return normalized(p - self.position)
     
     def intersection(self, origin, direction):
@@ -75,7 +91,7 @@ class sphere(scene_object):
                 hitDist = hitDist2
             hitPoint = origin + direction * hitDist
 
-            normal = self.normal(hitPoint)
+            normal = self.getNormal(hitPoint)
 
             color = self.color
             # teste de sombreamento simples
@@ -96,7 +112,8 @@ class scene_main:
         self.objs.append(sphere([0,0,0],0.6))
         self.objs.append(sphere([2,1,0.3],0.5, (0,255,0)))
         self.objs.append(sphere([2,1,7], 2, (0,0,255)))
-        self.objs.append(plane([0,0,0],[0,1,0] , color= (100,100,100)))
+        self.objs.append(plane([0,-.25,0],[0,1,0] , color= (150,150,150)))
+        self.objs.append(plane([3.5,0,0],[-1,-1,0] , color= (150, 0,150)))
 
 # função principal para criar a imagem test.png com o resultado
 def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up):
@@ -160,7 +177,7 @@ res_horizontal = 300 * res_factor
 res_vertical = 200 * res_factor
 size_pixel = 0.05 / res_factor
 cam_dist = 7.5
-cam_pos = numpy.array([0,0,-5])
+cam_pos = numpy.array([0,1,-5])
 # se certificar de que cam_forward e cam_up não são paralelos o [0,0,0]
 cam_forward = numpy.array([0,0,1])
 cam_up = numpy.array([0,1,0])
