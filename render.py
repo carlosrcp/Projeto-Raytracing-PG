@@ -198,7 +198,7 @@ def shade(hit:rayhit, scene:scene_main):
 
         ndotl = numpy.dot(hit.hitNormal, l).real
         if ndotl > 0:
-            shadowHit = trace(hit.hitPoint, l, scene)
+            shadowHit = trace(hit.hitPoint + l *0.00001, l, scene)
             if shadowHit !=0 and shadowHit.hitDistance < lDist:
                 continue
             
