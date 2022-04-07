@@ -1,9 +1,6 @@
 from cmath import atan, sqrt
-from http.server import SimpleHTTPRequestHandler
-from sys import set_coroutine_origin_tracking_depth
 import numpy
 from PIL import Image
-from pkg_resources import split_sections
 
 # classe para passar os dados quando houver algum hit
 class rayhit:
@@ -29,7 +26,7 @@ class scene_object:
     def intersection(self, origin, direction):
         return
 
-# calsse do objeto: plano
+# classe do objeto: plano
 class plane(scene_object):
     def __init__(self, position=[0, 0, 0], normal=[0,1,0], color=(255, 0, 0)):
         self.normal = normalized(normal)
@@ -39,14 +36,14 @@ class plane(scene_object):
         return self.normal
     
     def intersection(self, origin, direction):
-        
+        #formula para interseção demonstrada no stratchapixel.com        
         ldotn = numpy.dot(normalized(direction),normalized(self.normal))
-        if abs(ldotn) <= 0.001:
+        if abs(ldotn) <= 0.000:
             return 0
         
         t = numpy.dot((self.position - origin), self.normal) / ldotn
         
-        # erro quando a camera está na area do plano
+        # ocorre um erro quando a posição da camera é faz parte do plano, o fica 0
 
         if t<0:
             return 0
@@ -112,13 +109,6 @@ class scene_main:
         # criação de objetos para popular a cena
         self.objs = []
         self.bg_color = (0,0,0)
-
-        #self.objs.append(sphere([-4,-5,12], 5, (0,255,255)))
-        #self.objs.append(sphere([0,0,0],0.6))
-        #self.objs.append(sphere([2,1,0.3],0.5, (0,255,0)))
-        #self.objs.append(sphere([2,1,7], 2, (0,0,255)))
-        #self.objs.append(plane([0,-.25,0],[0,1,0] , color= (150,150,150)))
-        #self.objs.append(plane([3.5,0,0],[-1,-1,0] , color= (150, 0,150)))
     
     def setBackground_Color(self, color):
         self.bg_color = color
@@ -187,7 +177,7 @@ def normalized(vec):
 
 
 # valores padrão
-# para mudara  resolucao sem alterar o fov, quanto maior melhor a imagem e mais lento fica
+# para mudar a resolucao sem alterar o fov, quanto maior melhor a imagem e mais lento fica
 res_factor = 1
 
 res_horizontal = 300 * res_factor
@@ -206,9 +196,12 @@ cam_up = numpy.array([0,1,0])
 new_scene = scene_main()
 bg_color = (0,0,0)
 
+xyz_coord = (1,-1,1)
+
 leituraArquivo = input('Ler do arquivo "inputs"? (s para sim): ')
 
-if leituraArquivo == 's':
+# LEITURA DOS INPUTS
+if leituraArquivo == 's': # leitura do arquivo input.txt como inputs
     with open("input.txt") as f:
         inputs = f.read().split()
 
@@ -252,9 +245,9 @@ if leituraArquivo == 's':
 
     new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
 
-    cam_pos = numpy.array([cam_pos_x, cam_pos_y, cam_pos_z])
-    cam_forward = numpy.array([cam_forward_x, cam_forward_y, cam_forward_z]) - cam_pos
-    cam_up = numpy.array([cam_up_x, cam_up_y, cam_up_z])
+    cam_pos = numpy.array([cam_pos_x  * xyz_coord[0], cam_pos_y  * xyz_coord[1], cam_pos_z * xyz_coord[2]])
+    cam_forward = numpy.array([cam_forward_x * xyz_coord[1], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
+    cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
 
     cam_forward = normalized(cam_forward)
     cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
@@ -278,7 +271,7 @@ if leituraArquivo == 's':
         pos_z = float(inputs[index])
         index +=1
 
-        position = numpy.array([pos_x, pos_y, pos_z])
+        position = numpy.array([pos_x * xyz_coord[0], pos_y * xyz_coord[1], pos_z * xyz_coord[2]])
 
         if obj_select == '*':
             radius = float(inputs[index])
@@ -293,10 +286,10 @@ if leituraArquivo == 's':
             normal_z = float(inputs[index])
             index +=1
 
-            normal = normalized([normal_x, normal_y, normal_z])
+            normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
 
             new_scene.addPlane(position, normal, color)
-else:
+else: # leitura de inputs manual
     res_vertical = int(input("resolucao vertical"))
     res_horizontal = int(input("resolucao horizontal"))
     size_pixel = float(input("tamanho do pixel"))
@@ -317,9 +310,9 @@ else:
 
     new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
 
-    cam_pos = numpy.array([cam_pos_x, cam_pos_y, cam_pos_z])
-    cam_forward = numpy.array([cam_forward_x, cam_forward_y, cam_forward_z]) - cam_pos
-    cam_up = numpy.array([cam_up_x, cam_up_y, cam_up_z])
+    cam_pos = numpy.array([cam_pos_x * xyz_coord[0], cam_pos_y * xyz_coord[1], cam_pos_z * xyz_coord[2]])
+    cam_forward = numpy.array([cam_forward_x * xyz_coord[0], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
+    cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
 
     cam_forward = normalized(cam_forward)
     cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
@@ -336,7 +329,7 @@ else:
         pos_y = float(input("pos y"))
         pos_z = float(input("pos z"))
         
-        position = numpy.array([pos_x, pos_y, pos_z])
+        position = numpy.array([pos_x * xyz_coord[0], pos_y * xyz_coord[1], pos_z * xyz_coord[2]])
 
         if obj_select == '*':
             radius = float(input("radius"))
@@ -347,7 +340,7 @@ else:
             normal_y = float(input("normal y"))
             normal_z = float(input("normal z"))
 
-            normal = normalized([normal_x, normal_y, normal_z])
+            normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
 
             new_scene.addPlane(position, normal, color)
 
@@ -355,6 +348,6 @@ else:
 # checa se cam_forward e cam_up são aceitos
 if (cam_forward[0] == 0 and cam_forward[1] == 0 and cam_forward[2] == 0) or (cam_up[0] == 0 and cam_up[1] == 0 and cam_up[2] == 0):
     print('cam_forward e cam_up não podem ser [0,0,0] ou paralelas')
-else:
+else: # Render da imagem
     print('gerando imagem...')
     render(res_horizontal, res_vertical, size_pixel,cam_dist, cam_pos, cam_forward, cam_up, new_scene)
