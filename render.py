@@ -15,7 +15,7 @@ class rayhit:
 
 # classe principal dos objetos da cena
 class scene_object:
-    def __init__(self, position = [0,0,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1):
+    def __init__(self, position = [0,0,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1, kr=0, kt=0, refN = 1):
         self.position = position
         #self.radius = radius
         self.color = color
@@ -24,6 +24,9 @@ class scene_object:
         self.kd = kd
         self.ks = ks
         self.phongN = phongN
+        self.kr = kr
+        self.kt = kt
+        self.refN = refN
     
     # retorna a normal no ponto p
     def getNormal(self, p):
@@ -35,9 +38,9 @@ class scene_object:
 
 # classe do objeto: plano
 class plane(scene_object):
-    def __init__(self, position = [0,0,0], normal = [0,1,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1):
+    def __init__(self, position = [0,0,0], normal = [0,1,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1, kr=0, kt=0, refN = 1):
         self.normal = normalized(normal)
-        super().__init__(position, color, ka, kd, ks, phongN)
+        super().__init__(position, color, ka, kd, ks, phongN, kr, kt, refN)
     
     def getNormal(self, p):
         return self.normal
@@ -64,9 +67,9 @@ class plane(scene_object):
 # classe do objeto: esfera
 class sphere(scene_object):
 
-    def __init__(self, position = [0,0,0], radius = 1, color = (255,0,0), ka=1, kd=1, ks=1, phongN=1):
+    def __init__(self, position = [0,0,0], radius = 1, color = (255,0,0), ka=1, kd=1, ks=1, phongN=1, kr=0, kt=0, refN = 1):
         self.radius = radius
-        super().__init__(position, color, ka, kd, ks, phongN)
+        super().__init__(position, color, ka, kd, ks, phongN, kr, kt, refN)
     
     def getNormal(self, p):
         return normalized(p - self.position)
@@ -120,11 +123,11 @@ class scene_main:
     def getBackground_Color(self):
         return self.bg_color
 
-    def addSphere(self, position, radius, color, ka, kd, ks, phongN):
-        self.objs.append(sphere(position, radius, color, ka, kd, ks, phongN))
+    def addSphere(self, position, radius, color, ka, kd, ks, phongN, kr, kt, refN):
+        self.objs.append(sphere(position, radius, color, ka, kd, ks, phongN, kr, kt, refN))
     
-    def addPlane(self, position, normal, color, ka, kd, ks, phongN):
-        self.objs.append(plane(position, normal, color, ka, kd, ks, phongN))
+    def addPlane(self, position, normal, color, ka, kd, ks, phongN, kr, kt, refN):
+        self.objs.append(plane(position, normal, color, ka, kd, ks, phongN, kr, kt, refN))
 
     def addPointLight(self, position, color):
         self.lights.append(pointLight(position, color))
@@ -154,21 +157,21 @@ def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up, scene):
     topleft = cam_pos + cam_forward * d + (cam_up *  (res_v - 1) - cam_right * (res_h - 1)) * pxl_size * 0.5
     
     # dispara o raio no centro de cada pixel e guarda sua cor na img
-    for x in range(res_h):
-        for y in range(res_v):
+    for x in range(int(res_h/1)):
+        for y in range(int(res_v/1)):
             ray_dir = normalized((topleft + (cam_up * -y + cam_right * x) * pxl_size) - cam_pos)
-            img.putpixel((x,y), cast(cam_pos,ray_dir, scene))
+            img.putpixel((x,y), colorDenormalize(cast(cam_pos,ray_dir, scene, max_depth)))
      
     img.save('test.png')
     print("imagem salva")
 
-def cast(origin, direction,scene):
+def cast(origin, direction,scene, counter):
     color = colorNormalize(scene.getBackground_Color())
     hit = trace(origin,direction,scene)
     if hit:
-        color = shade(hit, scene)
-    
-    return colorDenormalize(color)
+        color = shade(hit, scene, counter)
+        
+    return (color)
 
 def trace(origin, direction, scene:scene_main):
 
@@ -186,7 +189,7 @@ def trace(origin, direction, scene:scene_main):
     
     return hit
 
-def shade(hit:rayhit, scene:scene_main):
+def shade(hit:rayhit, scene:scene_main, counter):
     color_difuse = colorNormalize(hit.color)
     color =  colorScale(colorMul(color_difuse, colorNormalize(scene.ambientLight)), hit.hitObj.ka)
 
@@ -212,6 +215,13 @@ def shade(hit:rayhit, scene:scene_main):
                 rjdotview = 0
             color = colorSum(color, colorScale(color_light , hit.hitObj.ks * numpy.power(rjdotview, hit.hitObj.phongN)))
 
+    # reflexão
+    if counter > 0:
+        if hit.hitObj.kr > 0:
+            view = normalized(hit.ray)
+            rayDir = numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
+            refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir, scene, counter-1)
+            color = colorSum(colorScale(color, 1-hit.hitObj.kr),colorScale(refColor,hit.hitObj.kr))             
     
     #color = (int(color[0]), int(color[1]), int(color[2]))
     return color
@@ -317,6 +327,8 @@ bg_color_g = int(inputs[index])
 index +=1
 bg_color_b = int(inputs[index])
 index +=1
+max_depth = int(inputs[index])
+index +=1
 k_obj = int(inputs[index])
 index +=1
 
@@ -348,6 +360,13 @@ for i in range(k_obj):
     phongN = float(inputs[index])
     index +=1
 
+    kr = float(inputs[index])
+    index +=1
+    kt = float(inputs[index])
+    index +=1
+    refN = float(inputs[index])
+    index +=1
+
     obj_select = inputs[index]
     index +=1
 
@@ -364,7 +383,7 @@ for i in range(k_obj):
         radius = float(inputs[index])
         index +=1
 
-        new_scene.addSphere(position, radius, color, ka, kd, ks, phongN)
+        new_scene.addSphere(position, radius, color, ka, kd, ks, phongN, kr, kt, refN)
     else:
         normal_x = float(inputs[index])
         index +=1
@@ -375,7 +394,7 @@ for i in range(k_obj):
 
         normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
 
-        new_scene.addPlane(position, normal, color, ka, kd, ks, phongN)
+        new_scene.addPlane(position, normal, color, ka, kd, ks, phongN, kr, kt, refN)
 
 cAmb_r = int(inputs[index])
 index +=1
