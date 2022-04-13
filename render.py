@@ -246,7 +246,7 @@ if leituraArquivo == 's': # leitura do arquivo input.txt como inputs
     new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
 
     cam_pos = numpy.array([cam_pos_x  * xyz_coord[0], cam_pos_y  * xyz_coord[1], cam_pos_z * xyz_coord[2]])
-    cam_forward = numpy.array([cam_forward_x * xyz_coord[1], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
+    cam_forward = numpy.array([cam_forward_x * xyz_coord[0], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
     cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
 
     cam_forward = normalized(cam_forward)
