@@ -1,22 +1,29 @@
 from cmath import atan, sqrt
 import numpy
 from PIL import Image
+from pkg_resources import NullProvider
 
 # classe para passar os dados quando houver algum hit
 class rayhit:
-    def __init__(self, hitObj,hitPoint, hitNormal, hitDistance, color):
+    def __init__(self, hitObj,hitPoint, hitNormal, hitDistance, color, ray):
         self.hitObj = hitObj
         self.hitPoint = hitPoint
         self.hitNormal = hitNormal
         self.hitDistance = hitDistance
         self.color = color
+        self.ray = ray
 
 # classe principal dos objetos da cena
 class scene_object:
-    def __init__(self, position = [0,0,0], color = (255,0,0)):
+    def __init__(self, position = [0,0,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1):
         self.position = position
         #self.radius = radius
         self.color = color
+        
+        self.ka = ka
+        self.kd = kd
+        self.ks = ks
+        self.phongN = phongN
     
     # retorna a normal no ponto p
     def getNormal(self, p):
@@ -28,9 +35,9 @@ class scene_object:
 
 # classe do objeto: plano
 class plane(scene_object):
-    def __init__(self, position=[0, 0, 0], normal=[0,1,0], color=(255, 0, 0)):
+    def __init__(self, position = [0,0,0], normal = [0,1,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1):
         self.normal = normalized(normal)
-        super().__init__(position, color)
+        super().__init__(position, color, ka, kd, ks, phongN)
     
     def getNormal(self, p):
         return self.normal
@@ -51,15 +58,15 @@ class plane(scene_object):
             hitPoint = origin + direction * t
             normal = self.getNormal(hitPoint)
             color = self.color
-            return rayhit(self, hitPoint, normal, t, color)
+            return rayhit(self, hitPoint, normal, t, color, direction)
 
 
 # classe do objeto: esfera
 class sphere(scene_object):
 
-    def __init__(self, position=[0, 0, 0], radius=1, color = (255,0,0)):
+    def __init__(self, position = [0,0,0], radius = 1, color = (255,0,0), ka=1, kd=1, ks=1, phongN=1):
         self.radius = radius
-        super().__init__(position, color)
+        super().__init__(position, color, ka, kd, ks, phongN)
     
     def getNormal(self, p):
         return normalized(p - self.position)
@@ -94,13 +101,8 @@ class sphere(scene_object):
             normal = self.getNormal(hitPoint)
 
             color = self.color
-            # teste de sombreamento simples
-            #ndotl = numpy.dot(normal, -normalized(numpy.array([1,-2,.5])))
-            #if ndotl<0.2:
-            #    ndotl = .2
-            #color = (int(color[0] * ndotl), int(color[1] * ndotl), int(color[2] * ndotl))
-
-            return rayhit(self, hitPoint, normal, hitDist, color)
+            
+            return rayhit(self, hitPoint, normal, hitDist, color, hitPoint - origin)
 
 # classe da cena, vai guardar os objetos
 class scene_main:
@@ -108,7 +110,9 @@ class scene_main:
         
         # criação de objetos para popular a cena
         self.objs = []
+        self.lights = []
         self.bg_color = (0,0,0)
+        self.ambientLight = (0,0,0)
     
     def setBackground_Color(self, color):
         self.bg_color = color
@@ -116,12 +120,27 @@ class scene_main:
     def getBackground_Color(self):
         return self.bg_color
 
-    def addSphere(self, position, radius, color):
-        self.objs.append(sphere(position, radius, color))
+    def addSphere(self, position, radius, color, ka, kd, ks, phongN):
+        self.objs.append(sphere(position, radius, color, ka, kd, ks, phongN))
     
-    def addPlane(self, position, normal, color):
-        self.objs.append(plane(position, normal, color))
+    def addPlane(self, position, normal, color, ka, kd, ks, phongN):
+        self.objs.append(plane(position, normal, color, ka, kd, ks, phongN))
 
+    def addPointLight(self, position, color):
+        self.lights.append(pointLight(position, color))
+    
+    def setAmbientLight(self, color):
+        self.ambientLight = color
+
+class light:
+    def __init__(self, position, color):
+        self.position = position
+        self.color = color
+
+class pointLight(light):
+
+    def __init__(self, position, color):
+        super().__init__(position, color)
 
 # função principal para criar a imagem test.png com o resultado
 def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up, scene):
@@ -144,12 +163,12 @@ def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up, scene):
     print("imagem salva")
 
 def cast(origin, direction,scene):
-    color = scene.getBackground_Color()
+    color = colorNormalize(scene.getBackground_Color())
     hit = trace(origin,direction,scene)
     if hit:
-        color = hit.color
+        color = shade(hit, scene)
     
-    return color
+    return colorDenormalize(color)
 
 def trace(origin, direction, scene:scene_main):
 
@@ -167,6 +186,39 @@ def trace(origin, direction, scene:scene_main):
     
     return hit
 
+def shade(hit:rayhit, scene:scene_main):
+    color_difuse = colorNormalize(hit.color)
+    # cor é iniciada como a ambiente
+    color =  colorScale(colorMul(color_difuse, colorNormalize(scene.ambientLight)), hit.hitObj.ka)
+
+    for light in scene.lights:
+        color_light = colorNormalize(light.color)
+        l = light.position - hit.hitPoint
+        lDist = numpy.linalg.norm(l)
+        l = normalized(l)
+
+        ndotl = numpy.dot(hit.hitNormal, l).real
+        if ndotl > 0:
+            # checar se tem algum objeto obstruindo a luz
+            shadowHit = trace(hit.hitPoint + l *0.00001, l, scene)
+            if shadowHit !=0 and shadowHit.hitDistance < lDist:
+                continue
+            
+            # soma da cor difusa
+            color = colorSum(color, colorScale(colorMul(color_light, color_difuse), ndotl * hit.hitObj.kd))
+            
+            rj = 2 * ndotl * hit.hitNormal - l
+
+            view = normalized(-hit.ray)
+            rjdotview = numpy.dot(rj,view).real
+            if rjdotview < 0:
+                rjdotview = 0
+                
+            # soma da parte specular
+            color = colorSum(color, colorScale(color_light , hit.hitObj.ks * numpy.power(rjdotview, hit.hitObj.phongN)))
+
+    return color
+
 # funcao que retorna um vetor normalizado
 def normalized(vec):
     n = numpy.linalg.norm(vec)
@@ -175,6 +227,38 @@ def normalized(vec):
     else:
         return vec / n
 
+# multiplica cores
+def colorMul(color1, color2):
+    r1 = color1[0]
+    g1 = color1[1]
+    b1 = color1[2]
+    
+    r2 = color2[0]
+    g2 = color2[1]
+    b2 = color2[2]
+
+    return (r1 * r2, g1 * g2, b1 * b2)
+
+# multiplica cor por um escalar
+def colorScale(color, f):
+    return (color[0] * f, color[1] * f, color[2] * f)
+
+def colorSum(color1, color2):
+    r1 = color1[0]
+    g1 = color1[1]
+    b1 = color1[2]
+    
+    r2 = color2[0]
+    g2 = color2[1]
+    b2 = color2[2]
+
+    return (r1+r2, g1+g2, b1+b2)
+
+def colorNormalize(color):
+    return (float(color[0]) / 255.0, float(color[1]) / 255.0, float(color[2]) / 255.0)
+
+def colorDenormalize(color):
+    return (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
 
 # valores padrão
 # para mudar a resolucao sem alterar o fov, quanto maior melhor a imagem e mais lento fica
@@ -198,151 +282,135 @@ bg_color = (0,0,0)
 
 xyz_coord = (1,-1,1)
 
-leituraArquivo = input('Ler do arquivo "inputs"? (s para sim): ')
-
 # LEITURA DOS INPUTS
-if leituraArquivo == 's': # leitura do arquivo input.txt como inputs
-    with open("input.txt") as f:
-        inputs = f.read().split()
+with open("input.txt") as f:
+    inputs = f.read().split()
 
-    index = 0
+index = 0
 
-    res_vertical = int(inputs[index])
-    index +=1
-    res_horizontal = int(inputs[index])
-    index +=1
-    size_pixel = float(inputs[index])
-    index +=1
-    cam_dist = float(inputs[index])
-    index +=1
-    cam_pos_x = float(inputs[index])
-    index +=1
-    cam_pos_y = float(inputs[index])
-    index +=1
-    cam_pos_z = float(inputs[index])
-    index +=1
-    cam_forward_x = float(inputs[index])
-    index +=1
-    cam_forward_y = float(inputs[index])
-    index +=1
-    cam_forward_z = float(inputs[index])
-    index +=1
-    cam_up_x = float(inputs[index])
-    index +=1
-    cam_up_y = float(inputs[index])
-    index +=1
-    cam_up_z = float(inputs[index])
-    index +=1
-    bg_color_r = int(inputs[index])
-    index +=1
-    bg_color_g = int(inputs[index])
-    index +=1
-    bg_color_b = int(inputs[index])
-    index +=1
-    k_obj = int(inputs[index])
-    index +=1
+res_vertical = int(inputs[index])
+index +=1
+res_horizontal = int(inputs[index])
+index +=1
+size_pixel = float(inputs[index])
+index +=1
+cam_dist = float(inputs[index])
+index +=1
+cam_pos_x = float(inputs[index])
+index +=1
+cam_pos_y = float(inputs[index])
+index +=1
+cam_pos_z = float(inputs[index])
+index +=1
+cam_forward_x = float(inputs[index])
+index +=1
+cam_forward_y = float(inputs[index])
+index +=1
+cam_forward_z = float(inputs[index])
+index +=1
+cam_up_x = float(inputs[index])
+index +=1
+cam_up_y = float(inputs[index])
+index +=1
+cam_up_z = float(inputs[index])
+index +=1
+bg_color_r = int(inputs[index])
+index +=1
+bg_color_g = int(inputs[index])
+index +=1
+bg_color_b = int(inputs[index])
+index +=1
+k_obj = int(inputs[index])
+index +=1
 
 
-    new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
+new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
 
-    cam_pos = numpy.array([cam_pos_x  * xyz_coord[0], cam_pos_y  * xyz_coord[1], cam_pos_z * xyz_coord[2]])
-    cam_forward = numpy.array([cam_forward_x * xyz_coord[0], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
-    cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
+cam_pos = numpy.array([cam_pos_x  * xyz_coord[0], cam_pos_y  * xyz_coord[1], cam_pos_z * xyz_coord[2]])
+cam_forward = numpy.array([cam_forward_x * xyz_coord[0], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
+cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
 
-    cam_forward = normalized(cam_forward)
-    cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
+cam_forward = normalized(cam_forward)
+cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
 
-    for i in range(k_obj):
-        color_r = int(inputs[index])
+for i in range(k_obj):
+    color_r = int(inputs[index])
+    index +=1
+    color_g = int(inputs[index])
+    index +=1
+    color_b = int(inputs[index])
+    index +=1
+    color = (color_r, color_g, color_b)
+
+    ka = float(inputs[index])
+    index +=1
+    kd = float(inputs[index])
+    index +=1
+    ks = float(inputs[index])
+    index +=1
+    phongN = float(inputs[index])
+    index +=1
+
+    obj_select = inputs[index]
+    index +=1
+
+    pos_x = float(inputs[index])
+    index +=1
+    pos_y = float(inputs[index])
+    index +=1
+    pos_z = float(inputs[index])
+    index +=1
+
+    position = numpy.array([pos_x * xyz_coord[0], pos_y * xyz_coord[1], pos_z * xyz_coord[2]])
+
+    if obj_select == '*':
+        radius = float(inputs[index])
         index +=1
-        color_g = int(inputs[index])
-        index +=1
-        color_b = int(inputs[index])
-        index +=1
-        color = (color_r, color_g, color_b)
 
-        obj_select = inputs[index]
+        new_scene.addSphere(position, radius, color, ka, kd, ks, phongN)
+    else:
+        normal_x = float(inputs[index])
         index +=1
-
-        pos_x = float(inputs[index])
+        normal_y = float(inputs[index])
         index +=1
-        pos_y = float(inputs[index])
-        index +=1
-        pos_z = float(inputs[index])
+        normal_z = float(inputs[index])
         index +=1
 
-        position = numpy.array([pos_x * xyz_coord[0], pos_y * xyz_coord[1], pos_z * xyz_coord[2]])
+        normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
 
-        if obj_select == '*':
-            radius = float(inputs[index])
-            index +=1
+        new_scene.addPlane(position, normal, color, ka, kd, ks, phongN)
 
-            new_scene.addSphere(position, radius, color)
-        else:
-            normal_x = float(inputs[index])
-            index +=1
-            normal_y = float(inputs[index])
-            index +=1
-            normal_z = float(inputs[index])
-            index +=1
+cAmb_r = int(inputs[index])
+index +=1
+cAmb_g = int(inputs[index])
+index +=1
+cAmb_b = int(inputs[index])
+index +=1
 
-            normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
+new_scene.setAmbientLight((cAmb_r,cAmb_g,cAmb_b))
 
-            new_scene.addPlane(position, normal, color)
-else: # leitura de inputs manual
-    res_vertical = int(input("resolucao vertical"))
-    res_horizontal = int(input("resolucao horizontal"))
-    size_pixel = float(input("tamanho do pixel"))
-    cam_dist = float(input("distancia camera"))
-    cam_pos_x = float(input("camera pos x"))
-    cam_pos_y = float(input("camera pos y"))
-    cam_pos_z = float(input("camera pos z"))
-    cam_forward_x = float(input("camera mira x"))
-    cam_forward_y = float(input("camera mira y"))
-    cam_forward_z = float(input("camera mira z"))
-    cam_up_x = float(input("camera up x"))
-    cam_up_y = float(input("camera up y"))
-    cam_up_z = float(input("camera up z"))
-    bg_color_r = int(input("cor fundo r (0 a 255)"))
-    bg_color_g = int(input("cor fundo g (0 a 255)"))
-    bg_color_b = int(input("cor fundo b (0 a 255)"))
-    k_obj = int(input("quantidade de objetos"))
+k_pl = int(inputs[index])
+index +=1
 
-    new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
+for i in range(k_pl):
+    color_r = int(inputs[index])
+    index +=1
+    color_g = int(inputs[index])
+    index +=1
+    color_b = int(inputs[index])
+    index +=1
+    color = (color_r, color_g, color_b)
 
-    cam_pos = numpy.array([cam_pos_x * xyz_coord[0], cam_pos_y * xyz_coord[1], cam_pos_z * xyz_coord[2]])
-    cam_forward = numpy.array([cam_forward_x * xyz_coord[0], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
-    cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
+    pos_x = float(inputs[index])
+    index +=1
+    pos_y = float(inputs[index])
+    index +=1
+    pos_z = float(inputs[index])
+    index +=1
 
-    cam_forward = normalized(cam_forward)
-    cam_up = normalized(cam_up - numpy.dot(cam_forward, cam_up) * cam_forward)
+    position = numpy.array([pos_x * xyz_coord[0], pos_y * xyz_coord[1], pos_z * xyz_coord[2]])
 
-    for i in range(k_obj):
-        color_r = int(input("color r"))
-        color_g = int(input("color g"))
-        color_b = int(input("color b"))
-        color = (color_r, color_g, color_b)
-
-        obj_select = input("* para esfera / para plano")
-        
-        pos_x = float(input("pos x"))
-        pos_y = float(input("pos y"))
-        pos_z = float(input("pos z"))
-        
-        position = numpy.array([pos_x * xyz_coord[0], pos_y * xyz_coord[1], pos_z * xyz_coord[2]])
-
-        if obj_select == '*':
-            radius = float(input("radius"))
-
-            new_scene.addSphere(position, radius, color)
-        else:
-            normal_x = float(input("normal x"))
-            normal_y = float(input("normal y"))
-            normal_z = float(input("normal z"))
-
-            normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
-
-            new_scene.addPlane(position, normal, color)
+    new_scene.addPointLight(position, color)
 
 
 # checa se cam_forward e cam_up são aceitos
