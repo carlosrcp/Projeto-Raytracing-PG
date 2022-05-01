@@ -1,7 +1,6 @@
 from cmath import atan, sqrt
 import numpy
 from PIL import Image
-from pkg_resources import NullProvider
 
 # classe para passar os dados quando houver algum hit
 class rayhit:
@@ -258,7 +257,8 @@ def colorNormalize(color):
     return (float(color[0]) / 255.0, float(color[1]) / 255.0, float(color[2]) / 255.0)
 
 def colorDenormalize(color):
-    return (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
+    f = max(1, *color)
+    return (int(color[0] * 255.0/f), int(color[1] * 255.0/f), int(color[2] * 255.0/f))
 
 # valores padrão
 # para mudar a resolucao sem alterar o fov, quanto maior melhor a imagem e mais lento fica
