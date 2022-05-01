@@ -265,7 +265,8 @@ def colorNormalize(color):
     return (float(color[0]) / 255.0, float(color[1]) / 255.0, float(color[2]) / 255.0)
 
 def colorDenormalize(color):
-    return (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
+    f = max(1,*color)
+    return (int(color[0] * 255.0/f), int(color[1] * 255.0/f), int(color[2] * 255.0/f))
 
 # valores padrão
 # para mudar a resolucao sem alterar o fov, quanto maior melhor a imagem e mais lento fica
@@ -287,7 +288,7 @@ cam_up = numpy.array([0,1,0])
 new_scene = scene_main()
 bg_color = (0,0,0)
 
-xyz_coord = (1,1,1)
+xyz_coord = (1,-1,1)
 
 # LEITURA DOS INPUTS
 with open("input.txt") as f:
@@ -336,7 +337,7 @@ index +=1
 new_scene.setBackground_Color((bg_color_r,bg_color_g,bg_color_b))
 
 cam_pos = numpy.array([cam_pos_x  * xyz_coord[0], cam_pos_y  * xyz_coord[1], cam_pos_z * xyz_coord[2]])
-cam_forward = numpy.array([cam_forward_x * xyz_coord[1], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
+cam_forward = numpy.array([cam_forward_x * xyz_coord[0], cam_forward_y * xyz_coord[1], cam_forward_z * xyz_coord[2]]) - cam_pos
 cam_up = numpy.array([cam_up_x * xyz_coord[0], cam_up_y * xyz_coord[1], cam_up_z * xyz_coord[2]])
 
 cam_forward = normalized(cam_forward)
