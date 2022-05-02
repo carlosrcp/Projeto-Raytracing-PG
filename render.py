@@ -1,7 +1,6 @@
 from cmath import atan, sqrt
 import numpy
 from PIL import Image
-from pkg_resources import NullProvider
 
 # classe para passar os dados quando houver algum hit
 class rayhit:
@@ -200,6 +199,9 @@ def shade(hit:rayhit, scene:scene_main, counter):
         l = normalized(l)
 
         ndotl = numpy.dot(hit.hitNormal, l).real
+        
+        
+
         if ndotl > 0:
             shadowHit = trace(hit.hitPoint + l *0.00001, l, scene)
             if shadowHit !=0 and shadowHit.hitDistance < lDist:
@@ -217,13 +219,16 @@ def shade(hit:rayhit, scene:scene_main, counter):
 
     # reflexão
     if counter > 0:
+        if hit.hitObj.kt > 0:
+            rayDir = refract(hit.ray,hit.hitNormal)
+            refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir,scene,counter-1)
+            color = colorSum(color,refColor)
         if hit.hitObj.kr > 0:
             view = normalized(hit.ray)
-            rayDir = numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
+            rayDir = reflect(view, hit.hitNormal) #numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
             refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir, scene, counter-1)
-            color = colorSum(colorScale(color, 1-hit.hitObj.kr),colorScale(refColor,hit.hitObj.kr))             
+            color = colorSum(colorScale(color, 1-hit.hitObj.kr),colorScale(refColor,hit.hitObj.kr))
     
-    #color = (int(color[0]), int(color[1]), int(color[2]))
     return color
 
 # funcao que retorna um vetor normalizado
@@ -233,6 +238,21 @@ def normalized(vec):
         return vec
     else:
         return vec / n
+
+# função para refletir um raio
+def reflect(vec, normal):
+    n = normalized(normal)
+    return numpy.dot(vec, n) * n * -2 + vec
+
+# refracao: vector = vetor incidencia // normal = normal da superficie // n = n1 / n2 (coeficientes) 
+def refract(vec, normal, n):
+    c1 = numpy.dot(-normalized(vec),normalized(normal))
+    c2 = numpy.sqrt(1-numpy.power(n,2)*(1-numpy.power(c1,2)))
+
+    t = n * (vec +c1*normal)-normal*c2
+
+    return normalized(t)
+
 
 # multiplica cores
 def colorMul(color1, color2):
