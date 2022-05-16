@@ -34,6 +34,9 @@ class scene_object:
     # retorna 0 se não houver hit, se houver retorna um rayhit
     def intersection(self, origin, direction):
         return
+    
+    def intersectionDistance(self,origin,direction):
+        return
 
 # classe do objeto: plano
 class plane(scene_object):
@@ -45,9 +48,9 @@ class plane(scene_object):
         return self.normal
     
     def intersection(self, origin, direction):
-        #formula para interseção demonstrada no stratchapixel.com        
+        #formula para interseção demonstrada no scratchapixel.com        
         ldotn = numpy.dot(normalized(direction),normalized(self.normal))
-        if abs(ldotn) <= 0.000:
+        if ldotn >= 0.000:
             return 0
         
         t = numpy.dot((self.position - origin), self.normal) / ldotn
@@ -61,6 +64,21 @@ class plane(scene_object):
             normal = self.getNormal(hitPoint)
             color = self.color
             return rayhit(self, hitPoint, normal, t, color, hitPoint - origin)
+    
+    def intersectionDistance(self,origin,direction):
+        #formula para interseção demonstrada no scratchapixel.com        
+        ldotn = numpy.dot(normalized(direction),normalized(self.normal))
+        if ldotn >= 0.000:
+            return -1
+        
+        t = numpy.dot((self.position - origin), self.normal) / ldotn
+        
+        # ocorre um erro quando a posição da camera é faz parte do plano, o fica 0
+
+        if t<0:
+            return -1
+        else:
+            return t
 
 
 # classe do objeto: esfera
@@ -105,6 +123,32 @@ class sphere(scene_object):
             color = self.color
             
             return rayhit(self, hitPoint, normal, hitDist, color, hitPoint - origin)
+
+    def intersectionDistance(self, origin, direction):
+        #formula para interseção demonstrada no stratchapixel.com
+        l = self.position - origin
+        
+        tca = numpy.dot(l,direction)
+
+        if tca < 0:
+            return -1
+        
+        pitagoras = pow(numpy.linalg.norm(l) ,2) - pow(tca,2)
+        if pitagoras < 0:
+            return -1
+        d = sqrt(pitagoras)
+        
+        if d.real < 0.0:
+            return -1
+        elif d.real > self.radius:
+            return -1
+        else:
+            thc = sqrt(pow(self.radius,2) - pow(d,2))
+            hitDist = tca - thc
+            hitDist2 = tca + thc
+            if hitDist2 < hitDist:
+                hitDist = hitDist2
+            return hitDist
 
 # classe da cena, vai guardar os objetos
 class scene_main:
@@ -175,15 +219,29 @@ def cast(origin, direction,scene, counter):
 def trace(origin, direction, scene:scene_main):
 
     hit = 0
-    for i in range(len(scene.objs)):
-        checkHit = scene.objs[i].intersection(origin,direction)
+    closeHit = -1
+    closeDistance = -1
 
-        if checkHit:
-            if hit:
-                if checkHit.hitDistance < hit.hitDistance:
-                    hit = checkHit
-            else:
-                hit = checkHit
+    for i in range(len(scene.objs)):
+        hitDistance = scene.objs[i].intersectionDistance(origin,direction)
+        if hitDistance !=-1:
+            if closeHit == -1 or hitDistance < closeDistance:
+                closeDistance=hitDistance
+                closeHit = i
+    
+    if closeHit !=-1:
+        hit = scene.objs[closeHit].intersection(origin,direction)
+
+
+    # for i in range(len(scene.objs)):
+    #     checkHit = scene.objs[i].intersection(origin,direction)
+
+    #     if checkHit:
+    #         if hit:
+    #             if checkHit.hitDistance < hit.hitDistance:
+    #                 hit = checkHit
+    #         else:
+    #             hit = checkHit
 
     
     return hit
@@ -220,12 +278,12 @@ def shade(hit:rayhit, scene:scene_main, counter):
     # reflexão
     if counter > 0:
         if hit.hitObj.kt > 0:
-            rayDir = refract(hit.ray,hit.hitNormal)
+            rayDir = refract(hit.ray,hit.hitNormal, 0.5)
             refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir,scene,counter-1)
             color = colorSum(color,refColor)
         if hit.hitObj.kr > 0:
             view = normalized(hit.ray)
-            rayDir = reflect(view, hit.hitNormal) #numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
+            rayDir = reflect(view, hit.hitNormal, 0.5) #numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
             refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir, scene, counter-1)
             color = colorSum(colorScale(color, 1-hit.hitObj.kr),colorScale(refColor,hit.hitObj.kr))
     
@@ -240,7 +298,7 @@ def normalized(vec):
         return vec / n
 
 # função para refletir um raio
-def reflect(vec, normal):
+def reflect(vec, normal, n):
     n = normalized(normal)
     return numpy.dot(vec, n) * n * -2 + vec
 
