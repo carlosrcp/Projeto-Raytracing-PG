@@ -1,5 +1,6 @@
 from cmath import atan, sqrt
 from concurrent.futures import thread
+from xml.dom import NoDataAllowedErr
 import numpy
 from PIL import Image
 from multiprocessing import Process, Array
@@ -118,6 +119,11 @@ class sphere(scene_object):
             hitDist2 = tca + thc
             if hitDist2 < hitDist:
                 hitDist = hitDist2
+            
+            if numpy.linalg.norm(l) < self.radius:
+                hitDist = numpy.maximum(tca-thc,tca+thc)
+
+
             hitPoint = origin + direction * hitDist
 
             normal = self.getNormal(hitPoint)
@@ -230,7 +236,7 @@ def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up, scene, max_depth
         ars.append(Array("i",range(res_v * (xranges[t + 1] - xranges[t]))))
 
         all_threads.append(Process(target=thread_render, args=(cam_pos,cam_up,cam_right,topleft,pxl_size,scene,xranges[t],xranges[t+1],0,res_v, 
-            max_depth, img, ars[t*3],ars[t*3+1], ars[t*3+2]),daemon=True))
+            max_depth, ars[t*3],ars[t*3+1], ars[t*3+2]),daemon=True))
     
     #iniciar as threads
     for x in all_threads:
@@ -252,7 +258,7 @@ def render(res_h, res_v, pxl_size,d,cam_pos,cam_forward,cam_up, scene, max_depth
     print("imagem salva")
 
 
-def thread_render(cam_pos, cam_up, cam_right, topleft, pxl_size, scene, x0, x1, y0, y1, max_depth, img, arsR,arsG,arsB):
+def thread_render(cam_pos, cam_up, cam_right, topleft, pxl_size, scene, x0, x1, y0, y1, max_depth, arsR,arsG,arsB):
     
     for x_ in range(x1-x0):
         x = x_ + x0
@@ -335,18 +341,28 @@ def shade(hit:rayhit, scene:scene_main, counter):
                 rjdotview = 0
             color = colorSum(color, colorScale(color_light , hit.hitObj.ks * numpy.power(rjdotview, hit.hitObj.phongN)))
 
-    # reflexão
+    # contador de rays
     if counter > 0:
+        # refracao
+        kr = hit.hitObj.kr
         if hit.hitObj.kt > 0:
-            rayDir = refract(hit.ray,hit.hitNormal, 0.5)
-            refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir,scene,counter-1)
-            color = colorSum(color,refColor)
-        if hit.hitObj.kr > 0:
             view = normalized(hit.ray)
-            rayDir = reflect(view, hit.hitNormal, 0.5) #numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
+            rayDir = refract(view, normalized(hit.hitNormal), hit.hitObj.refN)
+            
+            if numpy.isscalar(rayDir) == False:
+                refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir, scene, counter-1)
+                color = colorSum(color,colorScale(refColor, hit.hitObj.kt))
+            else:
+                kr = 1
+        
+        #reflexao
+        if kr > 0:
+            view = normalized(hit.ray)
+            rayDir = reflect(view, hit.hitNormal) #numpy.dot(view, hit.hitNormal) * -2 * hit.hitNormal + view
             refColor = cast(hit.hitPoint + rayDir * 0.00001, rayDir, scene, counter-1)
-            color = colorSum(colorScale(color, 1-hit.hitObj.kr),colorScale(refColor,hit.hitObj.kr))
+            color = colorSum(color,colorScale(refColor, kr))
     
+
     return color
 
 # funcao que retorna um vetor normalizado
@@ -358,12 +374,51 @@ def normalized(vec):
         return vec / n
 
 # função para refletir um raio
-def reflect(vec, normal, n):
+def reflect(vec, normal):
     n = normalized(normal)
     return numpy.dot(vec, n) * n * -2 + vec
 
 # refracao: vector = vetor incidencia // normal = normal da superficie // n = n1 / n2 (coeficientes) 
 def refract(vec, normal, n):
+
+    w = -vec
+
+    if numpy.dot(w,normal)>0:
+        ndotw = numpy.dot(normal,w)
+
+        delta = 1 - (1/(n*n)) *(1-ndotw*ndotw)
+
+        if delta < 0:
+            return -1
+        else:
+            t = - (1/n) * w - (numpy.sqrt(delta) - (1/n) * ndotw) * normal
+            return t
+    else:
+
+        normal1 = -normal
+        ndotw = numpy.dot(normal1,w)
+        
+        n1 = 1/n
+
+        delta = 1 - (1/(n1*n1)) *(1-ndotw*ndotw)
+
+        if(delta<0):
+            return -1
+        else:
+            t =  - (1/n1) * w - (numpy.sqrt(delta)-(1/n1) * ndotw) * normal1
+            return t
+
+
+
+
+    # c1 = numpy.dot(-normalized(vec),normalized(normal))
+    # c2 = numpy.sqrt(1-numpy.power(n,2)*(1-numpy.power(c1,2)))
+
+    # t = n * (vec +c1*normal)-normal*c2
+
+    #return normalized(t)
+
+def refractVelho(vec, normal, n):
     c1 = numpy.dot(-normalized(vec),normalized(normal))
     c2 = numpy.sqrt(1-numpy.power(n,2)*(1-numpy.power(c1,2)))
 
