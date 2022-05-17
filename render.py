@@ -1,6 +1,6 @@
 from cmath import atan, sqrt
-from concurrent.futures import thread
-from xml.dom import NoDataAllowedErr
+import cmath
+from locale import normalize
 import numpy
 from PIL import Image
 from multiprocessing import Process, Array
@@ -30,6 +30,9 @@ class scene_object:
         self.kt = kt
         self.refN = refN
     
+    def getColor(self,p):
+        return self.color
+
     # retorna a normal no ponto p
     def getNormal(self, p):
         return
@@ -41,8 +44,9 @@ class scene_object:
     def intersectionDistance(self,origin,direction):
         return
 
-# classe do objeto: plano
-class plane(scene_object):
+
+# classe especial piso quadriculado
+class piso(scene_object):
     def __init__(self, position = [0,0,0], normal = [0,1,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1, kr=0, kt=0, refN = 1):
         self.normal = normalized(normal)
         super().__init__(position, color, ka, kd, ks, phongN, kr, kt, refN)
@@ -50,6 +54,13 @@ class plane(scene_object):
     def getNormal(self, p):
         return self.normal
     
+    def getColor(self, p):
+        f = .025
+        if numpy.floor(p[0].real * f) % 2 ==  numpy.floor(p[1].real * f) % 2:
+            return (0,0,0)
+        else:
+            return (255,255,255)
+
     def intersection(self, origin, direction):
         #formula para interseção demonstrada no scratchapixel.com        
         ldotn = numpy.dot(normalized(direction),normalized(self.normal))
@@ -65,7 +76,53 @@ class plane(scene_object):
         else:
             hitPoint = origin + direction * t
             normal = self.getNormal(hitPoint)
-            color = self.color
+            color = self.getColor(hitPoint)
+            return rayhit(self, hitPoint, normal, t, color, hitPoint - origin)
+    
+    def intersectionDistance(self,origin,direction):
+        #formula para interseção demonstrada no scratchapixel.com        
+        ldotn = numpy.dot(normalized(direction),normalized(self.normal))
+        if ldotn >= 0.000:
+            return -1
+        
+        t = numpy.dot((self.position - origin), self.normal) / ldotn
+        
+        # ocorre um erro quando a posição da camera é faz parte do plano, o fica 0
+
+        if t<0:
+            return -1
+        else:
+            return t
+
+
+# classe do objeto: plano
+class plane(scene_object):
+    def __init__(self, position = [0,0,0], normal = [0,1,0], color = (255,0,0), ka=1, kd=1, ks=1, phongN=1, kr=0, kt=0, refN = 1):
+        self.normal = normalized(normal)
+        super().__init__(position, color, ka, kd, ks, phongN, kr, kt, refN)
+    
+    def getNormal(self, p):
+        return self.normal
+    
+    def getColor(self, p):
+        return super().getColor(p)
+
+    def intersection(self, origin, direction):
+        #formula para interseção demonstrada no scratchapixel.com        
+        ldotn = numpy.dot(normalized(direction),normalized(self.normal))
+        if ldotn >= 0.000:
+            return 0
+        
+        t = numpy.dot((self.position - origin), self.normal) / ldotn
+        
+        # ocorre um erro quando a posição da camera é faz parte do plano, o fica 0
+
+        if t<0:
+            return 0
+        else:
+            hitPoint = origin + direction * t
+            normal = self.getNormal(hitPoint)
+            color = self.getColor(hitPoint)
             return rayhit(self, hitPoint, normal, t, color, hitPoint - origin)
     
     def intersectionDistance(self,origin,direction):
@@ -93,6 +150,9 @@ class sphere(scene_object):
     
     def getNormal(self, p):
         return normalized(p - self.position)
+    
+    def getColor(self, p):
+        return super().getColor(p)
     
     def intersection(self, origin, direction):
         #formula para interseção demonstrada no stratchapixel.com
@@ -128,7 +188,7 @@ class sphere(scene_object):
 
             normal = self.getNormal(hitPoint)
 
-            color = self.color
+            color = self.getColor(hitPoint)
             
             return rayhit(self, hitPoint, normal, hitDist, color, hitPoint - origin)
 
@@ -180,11 +240,15 @@ class scene_main:
     def addPlane(self, position, normal, color, ka, kd, ks, phongN, kr, kt, refN):
         self.objs.append(plane(position, normal, color, ka, kd, ks, phongN, kr, kt, refN))
 
+    def addPiso(self, position, normal, color, ka, kd, ks, phongN, kr, kt, refN):
+        self.objs.append(piso(position, normal, color, ka, kd, ks, phongN, kr, kt, refN))
+
     def addPointLight(self, position, color):
         self.lights.append(pointLight(position, color))
     
     def setAmbientLight(self, color):
         self.ambientLight = color
+    
 
 class light:
     def __init__(self, position, color):
@@ -581,7 +645,7 @@ if __name__ == '__main__':
             index +=1
 
             new_scene.addSphere(position, radius, color, ka, kd, ks, phongN, kr, kt, refN)
-        else:
+        elif obj_select == '/':
             normal_x = float(inputs[index])
             index +=1
             normal_y = float(inputs[index])
@@ -592,6 +656,18 @@ if __name__ == '__main__':
             normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
 
             new_scene.addPlane(position, normal, color, ka, kd, ks, phongN, kr, kt, refN)
+        else:
+            normal_x = float(inputs[index])
+            index +=1
+            normal_y = float(inputs[index])
+            index +=1
+            normal_z = float(inputs[index])
+            index +=1
+
+            normal = normalized([normal_x * xyz_coord[0], normal_y * xyz_coord[1], normal_z * xyz_coord[2]])
+
+            new_scene.addPiso(position, normal, color, ka, kd, ks, phongN, kr, kt, refN)
+
 
     cAmb_r = int(inputs[index])
     index +=1
